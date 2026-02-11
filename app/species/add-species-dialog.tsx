@@ -2,6 +2,7 @@
 
 import { Icons } from "@/components/icons";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogClose,
@@ -14,6 +15,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
 import { createBrowserSupabaseClient } from "@/lib/client-utils";
@@ -22,9 +24,6 @@ import { useRouter } from "next/navigation";
 import { useState, type BaseSyntheticEvent } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-
-// We use zod (z) to define a schema for the "Add species" form.
-// zod handles validation of the input values with methods like .string(), .nullable(). It also processes the form inputs with .transform() before the inputs are sent to the database.
 
 // Define kingdom enum for use in Zod schema and displaying dropdown options in the form
 const kingdoms = z.enum(["Animalia", "Plantae", "Fungi", "Protista", "Archaea", "Bacteria"]);
@@ -39,7 +38,6 @@ const speciesSchema = z.object({
   common_name: z
     .string()
     .nullable()
-    // Transform empty string or only whitespace input to null before form submission, and trim whitespace otherwise
     .transform((val) => (!val || val.trim() === "" ? null : val.trim())),
   kingdom: kingdoms,
   total_population: z.number().int().positive().min(1).nullable(),
@@ -47,24 +45,16 @@ const speciesSchema = z.object({
     .string()
     .url()
     .nullable()
-    // Transform empty string or only whitespace input to null before form submission, and trim whitespace otherwise
     .transform((val) => (!val || val.trim() === "" ? null : val.trim())),
   description: z
     .string()
     .nullable()
-    // Transform empty string or only whitespace input to null before form submission, and trim whitespace otherwise
     .transform((val) => (!val || val.trim() === "" ? null : val.trim())),
+  endangered: z.boolean(),
 });
 
 type FormData = z.infer<typeof speciesSchema>;
 
-// Default values for the form fields.
-/* Because the react-hook-form (RHF) used here is a controlled form (not an uncontrolled form),
-fields that are nullable/not required should explicitly be set to `null` by default.
-Otherwise, they will be `undefined` by default, which will raise warnings because `undefined` conflicts with controlled components.
-All form fields should be set to non-undefined default values.
-Read more here: https://legacy.react-hook-form.com/api/useform/
-*/
 const defaultValues: Partial<FormData> = {
   scientific_name: "",
   common_name: null,
@@ -72,23 +62,71 @@ const defaultValues: Partial<FormData> = {
   total_population: null,
   image: null,
   description: null,
+  endangered: false,
 };
 
 export default function AddSpeciesDialog({ userId }: { userId: string }) {
   const router = useRouter();
 
-  // Control open/closed state of the dialog
   const [open, setOpen] = useState<boolean>(false);
+  const [wikiSearch, setWikiSearch] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
 
-  // Instantiate form functionality with React Hook Form, passing in the Zod schema (for validation) and default values
   const form = useForm<FormData>({
     resolver: zodResolver(speciesSchema),
     defaultValues,
     mode: "onChange",
   });
 
+  const handleWikipediaSearch = async () => {
+    const query = wikiSearch.trim();
+    if (!query) return;
+
+    setIsSearching(true);
+    try {
+      const title = encodeURIComponent(query.replace(/ /g, "_"));
+      const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${title}`);
+
+      if (!res.ok) {
+        setIsSearching(false);
+        return toast({
+          title: "No Wikipedia article found",
+          description: `Could not find an article for "${query}".`,
+          variant: "destructive",
+        });
+      }
+
+      const data = (await res.json()) as {
+        extract?: string;
+        thumbnail?: { source?: string };
+        originalimage?: { source?: string };
+      };
+
+      if (data.extract) {
+        form.setValue("description", data.extract, { shouldValidate: true });
+      }
+
+      const imageUrl = data.thumbnail?.source ?? data.originalimage?.source;
+      if (imageUrl) {
+        form.setValue("image", imageUrl, { shouldValidate: true });
+      }
+
+      setIsSearching(false);
+      return toast({
+        title: "Autofilled from Wikipedia",
+        description: "Description" + (imageUrl ? " and image" : "") + " have been filled in.",
+      });
+    } catch {
+      setIsSearching(false);
+      return toast({
+        title: "Wikipedia search failed",
+        description: "Could not reach Wikipedia. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const onSubmit = async (input: FormData) => {
-    // The `input` prop contains data that has already been processed by zod. We can now use it in a supabase query
     const supabase = createBrowserSupabaseClient();
     const { error } = await supabase.from("species").insert([
       {
@@ -99,10 +137,10 @@ export default function AddSpeciesDialog({ userId }: { userId: string }) {
         scientific_name: input.scientific_name,
         total_population: input.total_population,
         image: input.image,
+        endangered: input.endangered,
       },
     ]);
 
-    // Catch and report errors from Supabase and exit the onSubmit function with an early 'return' if an error occurred.
     if (error) {
       return toast({
         title: "Something went wrong.",
@@ -111,16 +149,9 @@ export default function AddSpeciesDialog({ userId }: { userId: string }) {
       });
     }
 
-    // Because Supabase errors were caught above, the remainder of the function will only execute upon a successful edit
-
-    // Reset form values to the default (empty) values.
-    // Practically, this line can be removed because router.refresh() also resets the form. However, we left it as a reminder that you should generally consider form "cleanup" after an add/edit operation.
     form.reset(defaultValues);
-
+    setWikiSearch("");
     setOpen(false);
-
-    // Refresh all server components in the current route. This helps display the newly created species because species are fetched in a server component, species/page.tsx.
-    // Refreshing that server component will display the new species from Supabase
     router.refresh();
 
     return toast({
@@ -144,6 +175,39 @@ export default function AddSpeciesDialog({ userId }: { userId: string }) {
             Add a new species here. Click &quot;Add Species&quot; below when you&apos;re done.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Wikipedia Autofill */}
+        <div className="grid gap-2">
+          <label className="text-sm font-medium">Search Wikipedia</label>
+          <div className="flex gap-2">
+            <Input
+              placeholder="e.g. Cavia porcellus or Guinea pig"
+              value={wikiSearch}
+              onChange={(e) => setWikiSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void handleWikipediaSearch();
+                }
+              }}
+              disabled={isSearching}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void handleWikipediaSearch()}
+              disabled={isSearching || wikiSearch.trim() === ""}
+            >
+              {isSearching ? "Searching..." : "Search"}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Search by species name to autofill description and image from Wikipedia.
+          </p>
+        </div>
+
+        <Separator />
+
         <Form {...form}>
           <form onSubmit={(e: BaseSyntheticEvent) => void form.handleSubmit(onSubmit)(e)}>
             <div className="grid w-full items-center gap-4">
@@ -164,7 +228,6 @@ export default function AddSpeciesDialog({ userId }: { userId: string }) {
                 control={form.control}
                 name="common_name"
                 render={({ field }) => {
-                  // We must extract value from field and convert a potential defaultValue of `null` to "" because inputs can't handle null values: https://github.com/orgs/react-hook-form/discussions/4091
                   const { value, ...rest } = field;
                   return (
                     <FormItem>
@@ -212,7 +275,6 @@ export default function AddSpeciesDialog({ userId }: { userId: string }) {
                     <FormItem>
                       <FormLabel>Total population</FormLabel>
                       <FormControl>
-                        {/* Using shadcn/ui form with number: https://github.com/shadcn-ui/ui/issues/421 */}
                         <Input
                           type="number"
                           value={value ?? ""}
@@ -228,9 +290,23 @@ export default function AddSpeciesDialog({ userId }: { userId: string }) {
               />
               <FormField
                 control={form.control}
+                name="endangered"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                    <FormControl>
+                      <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>Endangered</FormLabel>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
                 name="image"
                 render={({ field }) => {
-                  // We must extract value from field and convert a potential defaultValue of `null` to "" because inputs can't handle null values: https://github.com/orgs/react-hook-form/discussions/4091
                   const { value, ...rest } = field;
                   return (
                     <FormItem>
@@ -251,7 +327,6 @@ export default function AddSpeciesDialog({ userId }: { userId: string }) {
                 control={form.control}
                 name="description"
                 render={({ field }) => {
-                  // We must extract value from field and convert a potential defaultValue of `null` to "" because textareas can't handle null values: https://github.com/orgs/react-hook-form/discussions/4091
                   const { value, ...rest } = field;
                   return (
                     <FormItem>

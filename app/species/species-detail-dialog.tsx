@@ -193,6 +193,11 @@ export default function SpeciesDetailDialog({
             </span>
           </div>
 
+          <div className="grid grid-cols-4 items-center gap-4">
+            <span className="text-sm font-semibold">Endangered</span>
+            <span className="col-span-3 text-sm">{species.endangered ? "Yes" : "No"}</span>
+          </div>
+
           {authorProfile && (
             <div className="grid grid-cols-4 items-center gap-4">
               <span className="text-sm font-semibold">Added by</span>
