@@ -155,12 +155,13 @@ export default function AnimalSpeedGraph() {
 
     legendData.forEach((diet, i) => {
       const row = legend.append("g").attr("transform", `translate(0, ${i * 25})`);
+      const fillColor: string = DIET_COLORS[diet] ?? "#888888";
       row
         .append("rect")
         .attr("width", 14)
         .attr("height", 14)
         .attr("rx", 2)
-        .attr("fill", DIET_COLORS[diet] ?? "#888888");
+        .attr("fill", fillColor);
       row
         .append("text")
         .attr("x", 20)
