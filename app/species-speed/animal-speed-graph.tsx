@@ -160,7 +160,7 @@ export default function AnimalSpeedGraph() {
         .attr("width", 14)
         .attr("height", 14)
         .attr("rx", 2)
-        .attr("fill", DIET_COLORS[diet]);
+        .attr("fill", DIET_COLORS[diet] ?? "#888888");
       row
         .append("text")
         .attr("x", 20)
