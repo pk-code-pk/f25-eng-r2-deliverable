@@ -1,0 +1,32 @@
+name,speed,diet
+Cheetah,120,carnivore
+Pronghorn,88.5,herbivore
+Springbok,88,herbivore
+Wildebeest,80.5,herbivore
+Lion,80,carnivore
+Thomson's Gazelle,80,herbivore
+Hare,72,herbivore
+African Wild Dog,71,carnivore
+Kangaroo,71,herbivore
+Horse,70.8,herbivore
+Onager,70,herbivore
+Greyhound,69,omnivore
+Coyote,65,omnivore
+Ostrich,60,omnivore
+Gray Fox,60,omnivore
+Hyena,60,omnivore
+Zebra,56,herbivore
+Grizzly Bear,55,omnivore
+Whippet,55,carnivore
+Elk,45,herbivore
+Giraffe,51.5,herbivore
+White-Tailed Deer,48,herbivore
+Warthog,48,omnivore
+Moose,35,herbivore
+Black Mamba,32,carnivore
+Domestic Cat,30,carnivore
+Elephant,25,herbivore
+Squirrel,20,omnivore
+Pig,17,omnivore
+Chicken,15,omnivore
+Mouse,12,omnivore
